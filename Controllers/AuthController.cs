@@ -1,7 +1,9 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TelegramClone.Api.Data;
 using TelegramClone.Api.Models;
+using TelegramClone.Api.Services;
 
 namespace TelegramClone.Api.Controllers
 {
@@ -10,10 +12,12 @@ namespace TelegramClone.Api.Controllers
     public class AuthController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly TokenService _tokenService;
 
-        public AuthController(AppDbContext context)
+        public AuthController(AppDbContext context, TokenService tokenService)
         {
             _context = context;
+            _tokenService = tokenService;
         }
 
         [HttpPost("register")]
@@ -37,8 +41,27 @@ namespace TelegramClone.Api.Controllers
             if (user == null || !BCrypt.Net.BCrypt.Verify(userDto.Password, user.PasswordHash))
                 return Unauthorized();
 
-            // TODO: Return JWT Token (bước sau)
-            return Ok("Login Success");
+            var token = _tokenService.GenerateToken(user.Username);
+            return Ok(new { token });
+        }
+
+        [Authorize]
+        [HttpGet("friends")]
+        public IActionResult GetFriends()
+        {
+            return Ok("Get data successfully");
+        }
+
+        [HttpGet("{user1}/{user2}")]
+        public async Task<IActionResult> GetMessage(string user1, string user2)
+        {
+            var messages = await _context.Messages
+                .Where(m => (m.Sender == user1 && m.Receiver == user2) ||
+                            (m.Sender == user2 && m.Receiver == user2))
+                .OrderBy(m => m.SentAt)
+                .ToListAsync();
+
+            return Ok(messages);
         }
     }
 }
